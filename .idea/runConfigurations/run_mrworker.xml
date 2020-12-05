@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="run mrworker" type="GoApplicationRunConfiguration" factoryName="Go Application" singleton="false">
+    <module name="6.824" />
+    <working_directory value="$PROJECT_DIR$/src/main" />
+    <go_parameters value="-i" />
+    <parameters value="wc.so" />
+    <kind value="FILE" />
+    <filePath value="$PROJECT_DIR$/src/main/mrworker.go" />
+    <directory value="$PROJECT_DIR$" />
+    <method v="2" />
+  </configuration>
+</component>
