@@ -38,6 +38,18 @@ func Worker(mapf func(string, string) []KeyValue,
 
 }
 
+func GetTask() {
+
+	args := EmptyArgs{}
+
+	// declare a reply structure.
+	task := TaskDTO{}
+
+	// send the RPC request, wait for the reply.
+	call("Master.GetTask", &args, &task)
+
+}
+
 //
 // example function to show how to make an RPC call to the master.
 //

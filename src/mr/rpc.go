@@ -23,6 +23,12 @@ type ExampleReply struct {
 }
 
 // Add your RPC definitions here.
+type EmptyArgs struct {
+}
+
+type TaskDTO struct {
+
+}
 
 
 // Cook up a unique-ish UNIX-domain socket name
