@@ -26,10 +26,15 @@ type ExampleReply struct {
 type EmptyArgs struct {
 }
 
-type TaskDTO struct {
+type GetTaskReply struct {
 
+	Task    *Task
+	NReduce int
 }
 
+type TaskDoneArgs struct {
+	Task *Task
+}
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the master.

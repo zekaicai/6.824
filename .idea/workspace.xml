@@ -3,6 +3,8 @@
   <component name="ChangeListManager">
     <list default="true" id="f3ffda96-cb81-41b5-88ce-d788613f9ec7" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/test.txt" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/mr/master.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/master.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/mr/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/rpc.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/mr/worker.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/worker.go" afterDir="false" />
@@ -29,6 +31,7 @@
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
     <property name="ASKED_SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="DefaultGoTemplateProperty" value="Go File" />
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
@@ -43,7 +46,23 @@
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
     <property name="settings.editor.selected.configurable" value="preferences.pluginManager" />
   </component>
-  <component name="RunManager" selected="Shell Script.build wc.so">
+  <component name="RunManager" selected="Go Build.go build test.go">
+    <configuration name="go build rpc.go" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+      <module name="6.824" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="FILE" />
+      <filePath value="$PROJECT_DIR$/src/mr/rpc.go" />
+      <directory value="$PROJECT_DIR$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go build test.go" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+      <module name="6.824" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="FILE" />
+      <filePath value="$PROJECT_DIR$/src/main/test.go" />
+      <directory value="$PROJECT_DIR$" />
+      <method v="2" />
+    </configuration>
     <configuration name="run mrmaster" type="GoApplicationRunConfiguration" factoryName="Go Application">
       <module name="6.824" />
       <working_directory value="$PROJECT_DIR$/src/main" />
@@ -54,7 +73,7 @@
       <directory value="$PROJECT_DIR$" />
       <method v="2" />
     </configuration>
-    <configuration name="build wc.so" type="ShConfigurationType">
+    <configuration name="build wc.so" type="ShConfigurationType" temporary="true">
       <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
       <option name="SCRIPT_PATH" value="$PROJECT_DIR$/src/main/build_wc.sh" />
       <option name="SCRIPT_OPTIONS" value="" />
@@ -70,8 +89,17 @@
     <list>
       <item itemvalue="Go Build.run mrworker" />
       <item itemvalue="Go Build.run mrmaster" />
+      <item itemvalue="Go Build.go build test.go" />
+      <item itemvalue="Go Build.go build rpc.go" />
       <item itemvalue="Shell Script.build wc.so" />
     </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Go Build.go build test.go" />
+        <item itemvalue="Go Build.go build rpc.go" />
+        <item itemvalue="Shell Script.build wc.so" />
+      </list>
+    </recent_temporary>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TypeScriptGeneratedFilesManager">
