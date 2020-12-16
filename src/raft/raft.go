@@ -173,7 +173,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.Term > rf.currentTerm {
 		DPrintf("[Server%d] received append entries with higher term from %d, " +
 			"enter a new term and become follower" ,rf.me, args.LeaderId)
-		rf.startNewTerm(args.Term)
+		//rf.startNewTerm(args.Term)
+		rf.setState(Follower)
+		rf.currentTerm = args.Term
+		rf.votedFor = -1
+		rf.resetElectionTimer()
 		reply.Term = rf.currentTerm
 		rf.mu.Unlock()
 		return
@@ -219,7 +223,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// (2) set votedFor in this new term to -1
 	if args.Term > rf.currentTerm {
 
-		rf.startNewTerm(args.Term)
+		//rf.startNewTerm(args.Term)
+		rf.setState(Follower)
+		rf.currentTerm = args.Term
+		rf.votedFor = -1
 	}
 	// if voted for is null or candidateID
 	// TODO: and candidate's log is at least as up-to-date as receiver's log, grant vote
@@ -228,6 +235,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = true
 		DPrintf("[Server%d] vote true for request from Server%d", rf.me, args.CandidateId)
+		rf.resetElectionTimer()
 		rf.mu.Unlock()
 		return
 	}
@@ -238,14 +246,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		" because it has already voted for another server in this term", rf.me, args.CandidateId)
 	rf.mu.Unlock()
 	return
-}
-
-func (rf *Raft) startNewTerm(term int) {
-
-	rf.setState(Follower)
-	rf.currentTerm = term
-	rf.votedFor = -1
-	rf.resetElectionTimer()
 }
 
 //
@@ -385,7 +385,11 @@ func (rf *Raft) startElection() {
 				DPrintf("[Server%d] Received response for a vote request, but find" +
 					"its term is smaller than that in the reply, so it set its term to" +
 					"the new term and enter follower state(from candidate state)", rf.me)
-				rf.startNewTerm(reply.Term)
+				//rf.startNewTerm(reply.Term)
+				rf.setState(Follower)
+				rf.currentTerm = reply.Term
+				rf.votedFor = -1
+				rf.resetElectionTimer()
 			}
 			if reply.VoteGranted {
 				count++
@@ -468,7 +472,11 @@ func (rf *Raft) startElection() {
 								DPrintf("[Server%d] Received response for a hearbeat, but find" +
 									"its term is smaller than that in the reply, so it set its term to" +
 									"the new term and enter follower state(from leader state)", rf.me)
-								rf.startNewTerm(reply.Term)
+								//rf.startNewTerm(reply.Term)
+								rf.setState(Follower)
+								rf.currentTerm = reply.Term
+								rf.votedFor = -1
+								rf.resetElectionTimer()
 							}
 						}(i)
 					}
