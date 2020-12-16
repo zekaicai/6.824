@@ -3,11 +3,11 @@
   <component name="ChangeListManager">
     <list default="true" id="f3ffda96-cb81-41b5-88ce-d788613f9ec7" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/test.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/test.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/mr/master.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/master.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/mr/rpc.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/rpc.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/mr/worker.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/mr/worker.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/raft/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/raft/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/raft/raft.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/raft/raft.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/raft/test_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/raft/test_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/raft/util.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/raft/util.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -87,17 +87,17 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Go Build.run mrworker" />
       <item itemvalue="Go Build.run mrmaster" />
-      <item itemvalue="Go Build.go build test.go" />
+      <item itemvalue="Go Build.run mrworker" />
       <item itemvalue="Go Build.go build rpc.go" />
+      <item itemvalue="Go Build.go build test.go" />
       <item itemvalue="Shell Script.build wc.so" />
     </list>
     <recent_temporary>
       <list>
         <item itemvalue="Go Build.go build test.go" />
-        <item itemvalue="Go Build.go build rpc.go" />
         <item itemvalue="Shell Script.build wc.so" />
+        <item itemvalue="Go Build.go build rpc.go" />
       </list>
     </recent_temporary>
   </component>
