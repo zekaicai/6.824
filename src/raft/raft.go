@@ -78,7 +78,12 @@ type Raft struct {
 	currentTerm int
 	votedFor int
 	electionTimerStartTime time.Time
+	waitElectionTimeOut bool // set to false when starting an election, if timer times out
+						// and the raft is in candidate state, set it to true and broadcast on cond
+						// to wake former raft waiting on cond for election result and end last round
+						// election, the timer will trigger a new election
 	randTimeOutPeriod time.Duration
+	cond *sync.Cond // condition variable for raft instance to wait on when waiting result for an election
 }
 
 // return currentTerm and whether this server
@@ -355,6 +360,7 @@ func (rf *Raft) startElection() {
 	rf.votedFor = rf.me
 	finished++
 	rf.resetElectionTimer()
+	rf.waitElectionTimeOut = false
 	rf.mu.Unlock()
 	cond := sync.NewCond(&rf.mu)
 	for i := 0; i < numServers; i++ {
@@ -401,26 +407,33 @@ func (rf *Raft) startElection() {
 
 	rf.mu.Lock()
 
-	voteTimeOut := false
-	go func() {
-		time.Sleep(time.Millisecond * WaitVoteTimeOut)
-		voteTimeOut = true
-		cond.Broadcast()
-	}()
-	for count <= numServers / 2 && finished != numServers && rf.state == Candidate && !voteTimeOut {
+	//voteTimeOut := false
+	//go func() {
+	//	time.Sleep(time.Millisecond * WaitVoteTimeOut)
+	//	voteTimeOut = true
+	//	cond.Broadcast()
+	//}()
+	for count <= numServers / 2 && finished != numServers && rf.state == Candidate && !rf.waitElectionTimeOut{
 		cond.Wait()
+	}
+
+	if rf.waitElectionTimeOut {
+		DPrintf("[Server%d] Times out when waiting for result of the election" +
+			", so it ends the current election thread, the timer will start a new election thread", rf.me)
+		rf.mu.Unlock()
+		return
 	}
 
 	if rf.state == Candidate {
 
-		if voteTimeOut {
-
-			DPrintf("[Server%d] Wait votes result for %d milliseconds and time out" +
-				"start a new election", rf.me, WaitVoteTimeOut)
-			rf.mu.Unlock()
-			rf.startElection()
-			return
-		}
+		//if voteTimeOut {
+		//
+		//	DPrintf("[Server%d] Wait votes result for %d milliseconds and time out" +
+		//		"start a new election", rf.me, WaitVoteTimeOut)
+		//	rf.mu.Unlock()
+		//	rf.startElection()
+		//	return
+		//}
 		if count > numServers / 2 {
 			DPrintf("Server %d received %d votes, win an election", rf.me, count)
 			rf.setState(Leader)
@@ -510,8 +523,8 @@ func (rf *Raft) electionTimeUp() bool {
 	//fmt.Println("[Server%d]" + now.String(), rf.me)
 	//fmt.Println("[Server%d]" +rf.electionTimerStartTime.Add(rf.randTimeOutPeriod).String(),  rf.me)
 	if now.After(rf.electionTimerStartTime.Add(rf.randTimeOutPeriod)) {
-		DPrintf("[Server%d] Start an election, it last received heartbeat from leader at %s," +
-			"and its random timer is %s", rf.me, rf.electionTimerStartTime, rf.randTimeOutPeriod)
+		//DPrintf("[Server%d] Start an election, it last received heartbeat from leader at %s," +
+		//	"and its random timer is %s", rf.me, rf.electionTimerStartTime, rf.randTimeOutPeriod)
 		return true
 	}
 	return false
@@ -544,10 +557,12 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	DPrintf("[Server%d] Make()", me)
 	rf.state = Follower
 	rf.mu = sync.Mutex{}
+	rf.cond = sync.NewCond(&rf.mu)
 	rf.mu.Lock()
 	rf.currentTerm = 0
 	rf.votedFor = -1
 	rf.resetElectionTimer()
+	rf.waitElectionTimeOut = false
 	rf.mu.Unlock()
 	go func() {
 		for {
@@ -556,11 +571,13 @@ func Make(peers []*labrpc.ClientEnd, me int,
 			}
 			rf.mu.Lock()
 			if rf.electionTimeUp() && rf.state != Leader{
-				rf.mu.Unlock()
-				rf.startElection()
-			} else {
-				rf.mu.Unlock()
+				if rf.state == Candidate {
+					rf.waitElectionTimeOut = true
+					rf.cond.Broadcast()
+				}
+				go rf.startElection()
 			}
+			rf.mu.Unlock()
 			time.Sleep(time.Millisecond * time.Duration(ElectionTimerCheckInterval))
 		}
 	}()
