@@ -241,6 +241,7 @@ func (rf *Raft) sendHeartbeatAndHandleReply(follower int) {
 
 	if !ok {
 
+		// TODO: seems sending don't need to retry if sending heartbeat fails
 		DPrintf("[Server%d] Error when sending heartbeat to Server%d", args.LeaderId, follower)
 		return
 	}
@@ -267,13 +268,29 @@ func (rf *Raft) requestVoteAndHandleReply(voter int, count, finished *int) {
 	rf.mu.Unlock()
 	reply := &RequestVoteReply{}
 	DPrintf("[Server%d] Send vote request to Server%d", rf.me, voter)
-	ok := rf.sendRequestVote(voter, args, reply)
-	if !ok {
-		DPrintf("[Server%d] Error when sending vote request to server %d", rf.me, voter)
-		return
+
+	for {
+		if rf.killed() {
+			return
+		}
+		ok := rf.sendRequestVote(voter, args, reply)
+		if ok {
+			break
+		}
+		DPrintf("[Server%d] Error when sending vote request to server %d, retry", rf.me, voter)
 	}
+
 	rf.mu.Lock() // TODO: the lock() is to protect count and finished local variables, not sure if should use another small lock
 	defer rf.mu.Unlock()
+
+	if reply.Term < rf.currentTerm {
+
+		DPrintf("[Server%d] Received response for a vote request in term %d, but it's now"+
+			"in term %d, which means it received an outdated vote,"+
+			" just discard the vote.", rf.me, reply.Term, rf.currentTerm)
+		return
+	}
+
 	if reply.Term > rf.currentTerm {
 		DPrintf("[Server%d] Received response for a vote request, but find"+
 			"its term is smaller than that in the reply, so it set its term to"+
@@ -282,6 +299,7 @@ func (rf *Raft) requestVoteAndHandleReply(voter int, count, finished *int) {
 		rf.currentTerm = reply.Term
 		rf.votedFor = -1
 		rf.resetElectionTimer()
+		panic("How could this happen???")
 	}
 	if reply.VoteGranted {
 		*count++

@@ -74,13 +74,13 @@ func TestReElection2A(t *testing.T) {
 	// be elected.
 	cfg.disconnect(leader2)
 	cfg.disconnect((leader2 + 1) % servers)
-	DPrintf("[Disconnect] Server%d and Server%d has disconnected", leader2, (leader2 + 1) % servers)
+	DPrintf("[Disconnect] Server%d and Server%d has disconnected", leader2, (leader2+1)%servers)
 	time.Sleep(2 * RaftElectionTimeout)
 	cfg.checkNoLeader()
 	DPrintf("[Progress] Line 75 passed")
 	// if a quorum arises, it should elect a leader.
 	cfg.connect((leader2 + 1) % servers)
-	DPrintf("[Reconnect]Server%d has reconnected", (leader2 + 1) % servers)
+	DPrintf("[Reconnect]Server%d has reconnected", (leader2+1)%servers)
 	cfg.checkOneLeader()
 	DPrintf("[Progress] Line 79 passed")
 
