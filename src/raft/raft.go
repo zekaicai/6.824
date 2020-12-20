@@ -7,7 +7,7 @@ package raft
 //
 // rf = Make(...)
 //   create a new Raft server.
-// rf.Start(command interface{}) (index, Term, isleader)
+// rf.Start(Command interface{}) (index, Term, isleader)
 //   start agreement on a new log entry
 // rf.GetState() (Term, isLeader)
 //   ask a Raft for its current Term, and whether it thinks it is leader
@@ -33,7 +33,7 @@ const (
 	MinElectionTimeOut         int = 500 // in Millisecond
 	MaxElectionTimeOut         int = 800 // in Millisecond
 	ElectionTimerCheckInterval int = 10  // Interval for the check go routine to check if it should start an election
-	HeartBeatInterval          int = 200 // The tester requires that the leader send heartbeat RPCs no more than ten times per second.
+	HeartBeatInterval          int = 100 // The tester requires that the leader send heartbeat RPCs no more than ten times per second.
 
 	// Raft instance state
 	Follower  int = 0
@@ -42,7 +42,7 @@ const (
 )
 
 //
-// as each Raft peer becomes aware that successive log entries are
+// as each Raft peer becomes aware that successive log Entries are
 // committed, the peer should send an ApplyMsg to the service (or
 // tester) on the same server, via the applyCh passed to Make(). set
 // CommandValid to true to indicate that the ApplyMsg contains a newly
@@ -56,6 +56,19 @@ type ApplyMsg struct {
 	CommandValid bool
 	Command      interface{}
 	CommandIndex int
+}
+
+type LogEntry struct {
+	Command interface{}
+	Term    int
+}
+
+func (entry *LogEntry) getTerm() int {
+
+	if entry == nil {
+		return -1
+	}
+	return entry.Term
 }
 
 //
@@ -83,6 +96,13 @@ type Raft struct {
 	waitElectionTimeOut bool
 	randTimeOutPeriod   time.Duration
 	cond                *sync.Cond // condition variable for raft instance to wait on when waiting result for an election
+
+	log         []LogEntry
+	nextIndex   []int
+	matchIndex  []int
+	commitIndex int
+	lastApplied int
+	applyCh     chan ApplyMsg
 }
 
 // return currentTerm and whether this server
@@ -139,14 +159,14 @@ func (rf *Raft) readPersist(data []byte) {
 
 //
 // the service using Raft (e.g. a k/v server) wants to start
-// agreement on the next command to be appended to Raft's log. if this
+// agreement on the next Command to be appended to Raft's log. if this
 // server isn't the leader, returns false. otherwise start the
 // agreement and return immediately. there is no guarantee that this
-// command will ever be committed to the Raft log, since the leader
+// Command will ever be committed to the Raft log, since the leader
 // may fail or lose an election. even if the Raft instance has been killed,
 // this function should return gracefully.
 //
-// the first return value is the index that the command will appear at
+// the first return value is the index that the Command will appear at
 // if it's ever committed. the second return value is the current
 // Term. the third return value is true if this server believes it is
 // the leader.
@@ -157,7 +177,21 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	isLeader := true
 
 	// Your code here (2B).
+	rf.mu.Lock()
+	DPrintf("[Server%d] Start()", rf.me)
+	isLeader = rf.state == Leader
+	if !isLeader {
+		rf.mu.Unlock()
+		return index, term, isLeader
+	}
 
+	rf.log = append(rf.log, LogEntry{
+		Command: command,
+		Term:    rf.currentTerm,
+	})
+	index = len(rf.log) - 1
+	term = rf.currentTerm
+	rf.mu.Unlock()
 	return index, term, isLeader
 }
 
@@ -183,6 +217,99 @@ func (rf *Raft) killed() bool {
 	return z == 1
 }
 
+func (rf *Raft) initNextIndex() {
+
+	rf.nextIndex = make([]int, len(rf.peers))
+
+	for i := 0; i < len(rf.nextIndex); i++ {
+
+		if rf.me == i {
+			rf.nextIndex[i] = -1
+			continue
+		}
+		rf.nextIndex[i] = len(rf.log) // last log index + 1
+	}
+}
+
+func (rf *Raft) hasLogEntriesToSendTo(follower int) bool {
+
+	return len(rf.log)-1 >= rf.nextIndex[follower]
+}
+
+func (rf *Raft) containsMatchingLogEntry(index int, term int) bool {
+
+	if !rf.containsLogEntryAtIndex(index) {
+		return false
+	}
+
+	return rf.log[index].Term == term
+}
+
+func (rf *Raft) containsLogEntryAtIndex(idx int) bool {
+
+	return len(rf.log)-1 >= idx
+}
+
+func (rf *Raft) initMatchIndex() {
+
+	rf.matchIndex = make([]int, len(rf.peers))
+
+	for i := 0; i < len(rf.matchIndex); i++ {
+
+		if rf.me == i {
+			rf.matchIndex[i] = -1
+			continue
+		}
+		rf.matchIndex[i] = 0 // last log index + 1
+	}
+}
+
+func (rf *Raft) majorityAgreesOnIndex(index int) bool {
+
+	count := 1
+	for i := 0; i < len(rf.matchIndex); i++ {
+
+		if rf.me == i {
+			continue
+		}
+		if rf.matchIndex[i] >= index {
+			count++
+		}
+	}
+
+	return count > len(rf.peers)/2
+}
+
+func (rf *Raft) isMoreUpToDate(args *RequestVoteArgs) bool {
+
+	myLastEntryIndex := len(rf.log) - 1
+	myLastEntryTerm := rf.log[myLastEntryIndex].Term
+
+	if myLastEntryTerm != args.LastLogTerm {
+		if myLastEntryTerm > args.LastLogTerm {
+			return true
+		} else {
+			return false
+		}
+	}
+
+	if myLastEntryIndex > args.LastLogIndex {
+		return true
+	}
+
+	return false
+}
+
+func (rf *Raft) printRaftMessage() {
+
+	DPrintf("[Server%d] Just won an election.\n"+
+		"Its current term is %d", rf.me, rf.currentTerm)
+	DPrintf("NextIndex")
+	for i := 0; i < len(rf.nextIndex); i++ {
+		DPrintf("Follower%d, nextIndex is %d", i, rf.nextIndex[i])
+	}
+}
+
 //
 // the service or tester wants to create a Raft server. the ports
 // of all the Raft servers (including this one) are in peers[]. this
@@ -206,11 +333,18 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.state = Follower
 	rf.mu = sync.Mutex{}
 	rf.cond = sync.NewCond(&rf.mu)
+	rf.applyCh = applyCh
+
 	rf.mu.Lock()
 	rf.currentTerm = 0
 	rf.votedFor = -1
 	rf.resetElectionTimer()
 	rf.waitElectionTimeOut = false
+	rf.log = make([]LogEntry, 1) // first index is 1, at index 0 is a {nil, 0} entry
+	rf.commitIndex = 0
+	rf.lastApplied = 0
+	rf.initNextIndex()
+	rf.initMatchIndex()
 	rf.mu.Unlock()
 	go rf.timerStart() // start a long running goroutine timely check if times up
 

@@ -13,6 +13,9 @@ type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
 	Term        int // candidate's Term
 	CandidateId int // candidate requesting vote
+	// following two args are for voter to check if candidate is as up-to-date as voter
+	LastLogIndex int // index of candidate’s last log entry (§5.4)
+	LastLogTerm  int // term of candidate’s last log entry (§5.4)
 }
 
 //
@@ -38,15 +41,15 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.VoteGranted = false
 		reply.Term = rf.currentTerm
 		DPrintf("[Server%d] Vote false for request from Server%d, "+
-			"because its term %d is greater than that in request(term %d)", rf.me, args.CandidateId,
+			"because its Term %d is greater than that in request(Term %d)", rf.me, args.CandidateId,
 			rf.currentTerm, args.Term)
 		// reply false if Term < currentTerm
 		rf.mu.Unlock()
 		return
 	}
-	// if this is the first time this server sees the new term,
-	// it (1) updates its term
-	// (2) set votedFor in this new term to -1
+	// if this is the first time this server sees the new Term,
+	// it (1) updates its Term
+	// (2) set votedFor in this new Term to -1
 	if args.Term > rf.currentTerm {
 
 		//rf.startNewTerm(args.Term)
@@ -55,11 +58,20 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.votedFor = -1
 	}
 	// if voted for is null or candidateID
-	// TODO: and candidate's log is at least as up-to-date as receiver's log, grant vote
+	// and candidate's log is at least as up-to-date as receiver's log, grant vote
 	if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
 
+		if rf.isMoreUpToDate(args) {
+			reply.Term = rf.currentTerm
+			reply.VoteGranted = false
+			DPrintf("[Server%d] Find its log is more up-to-date "+
+				"than that in the RPC args from Server%d, vote false", rf.me, args.CandidateId)
+			rf.mu.Unlock()
+			return
+		}
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = true
+		rf.votedFor = args.CandidateId
 		DPrintf("[Server%d] Vote true for request from Server%d", rf.me, args.CandidateId)
 		rf.resetElectionTimer()
 		rf.mu.Unlock()
@@ -69,7 +81,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	reply.Term = rf.currentTerm
 	reply.VoteGranted = false
 	DPrintf("[Server%d] Vote false for request from Server%d,"+
-		" because it has already voted for another server in this term", rf.me, args.CandidateId)
+		" because it has already voted for another server in this Term", rf.me, args.CandidateId)
 	rf.mu.Unlock()
 	return
 }
@@ -156,6 +168,7 @@ func (rf *Raft) startElection() {
 func (rf *Raft) waitForVoteResult(count *int, finished *int) {
 
 	rf.mu.Lock()
+	term := rf.currentTerm
 	numServers := len(rf.peers)
 
 	for *count <= numServers/2 && *finished != numServers && rf.state == Candidate && !rf.waitElectionTimeOut && !rf.killed() {
@@ -178,85 +191,22 @@ func (rf *Raft) waitForVoteResult(count *int, finished *int) {
 		if *count > numServers/2 {
 			DPrintf("[Server%d] Received %d votes, win an election", rf.me, *count)
 			rf.setState(Leader)
-			go rf.sendHeartbeat()
+			rf.initMatchIndex()
+			rf.initNextIndex()
+			rf.printRaftMessage()
+			go rf.startAppendEntries()
 		} else {
 			DPrintf("[Server%d] Received %d votes, lose an election", rf.me, *count)
 			rf.setState(Follower)
-			rf.resetElectionTimer()
 		}
 	} else {
 
-		DPrintf("[Server%d] End the election not in candidate state", rf.me)
-		rf.resetElectionTimer()
+		DPrintf("[Server%d] End the election of term %d "+
+			"not in candidate state, it's current state is %d", rf.me, term, rf.state)
+		//rf.resetElectionTimer()
 	}
 
 	rf.mu.Unlock()
-}
-
-func (rf *Raft) sendHeartbeat() {
-
-	for {
-
-		if rf.killed() {
-			return
-		}
-		rf.mu.Lock()
-		numServers := len(rf.peers)
-		if rf.state != Leader {
-
-			DPrintf("[Server%d] Stop sending heartbeat because it is no longer leader", rf.me)
-			rf.resetElectionTimer()
-			rf.mu.Unlock()
-			return
-		}
-		rf.mu.Unlock()
-		for i := 0; i < numServers; i++ {
-
-			if rf.killed() {
-				return
-			}
-			rf.mu.Lock()
-			if rf.me == i {
-				rf.mu.Unlock()
-				continue
-			}
-			rf.mu.Unlock()
-			go rf.sendHeartbeatAndHandleReply(i)
-		}
-		time.Sleep(time.Millisecond * time.Duration(HeartBeatInterval))
-	}
-}
-
-func (rf *Raft) sendHeartbeatAndHandleReply(follower int) {
-
-	rf.mu.Lock()
-	args := &AppendEntriesArgs{
-		Term:     rf.currentTerm,
-		LeaderId: rf.me,
-	}
-	rf.mu.Unlock()
-	reply := &AppendEntriesReply{}
-	DPrintf("[Server%d] Sent heartbeat to Server%d", args.LeaderId, follower)
-	ok := rf.sendAppendEntries(follower, args, reply)
-
-	if !ok {
-
-		// TODO: seems sending don't need to retry if sending heartbeat fails
-		DPrintf("[Server%d] Error when sending heartbeat to Server%d", args.LeaderId, follower)
-		return
-	}
-
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-	if reply.Term > rf.currentTerm {
-		DPrintf("[Server%d] Received response for a hearbeat, but find"+
-			"its term is smaller than that in the reply, so it set its term to"+
-			"the new term and enter follower state(from leader state)", rf.me)
-		rf.setState(Follower)
-		rf.currentTerm = reply.Term
-		rf.votedFor = -1
-		rf.resetElectionTimer()
-	}
 }
 
 func (rf *Raft) requestVoteAndHandleReply(voter int, count, finished *int) {
@@ -265,6 +215,8 @@ func (rf *Raft) requestVoteAndHandleReply(voter int, count, finished *int) {
 	rf.mu.Lock()
 	args.CandidateId = rf.me
 	args.Term = rf.currentTerm
+	args.LastLogIndex = len(rf.log) - 1
+	args.LastLogTerm = rf.log[args.LastLogIndex].Term
 	rf.mu.Unlock()
 	reply := &RequestVoteReply{}
 	DPrintf("[Server%d] Send vote request to Server%d", rf.me, voter)
@@ -285,21 +237,20 @@ func (rf *Raft) requestVoteAndHandleReply(voter int, count, finished *int) {
 
 	if reply.Term < rf.currentTerm {
 
-		DPrintf("[Server%d] Received response for a vote request in term %d, but it's now"+
-			"in term %d, which means it received an outdated vote,"+
+		DPrintf("[Server%d] Received response for a vote request in Term %d, but it's now"+
+			"in Term %d, which means it received an outdated vote,"+
 			" just discard the vote.", rf.me, reply.Term, rf.currentTerm)
 		return
 	}
 
 	if reply.Term > rf.currentTerm {
-		DPrintf("[Server%d] Received response for a vote request, but find"+
-			"its term is smaller than that in the reply, so it set its term to"+
-			"the new term and enter follower state(from candidate state)", rf.me)
+		DPrintf("[Server%d] Received response for a vote request, but find "+
+			"its Term is smaller than that in the reply, so it set its Term to "+
+			"the new Term and enter follower state(from candidate state)", rf.me)
 		rf.setState(Follower)
 		rf.currentTerm = reply.Term
 		rf.votedFor = -1
 		rf.resetElectionTimer()
-		panic("How could this happen???")
 	}
 	if reply.VoteGranted {
 		*count++

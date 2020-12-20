@@ -107,6 +107,7 @@ func TestBasicAgree2B(t *testing.T) {
 		}
 
 		xindex := cfg.one(index*100, servers, false)
+		fmt.Printf("iter%d pass\n", index)
 		if xindex != index {
 			t.Fatalf("got index %v but expected %v", xindex, index)
 		}
@@ -117,7 +118,7 @@ func TestBasicAgree2B(t *testing.T) {
 
 //
 // check, based on counting bytes of RPCs, that
-// each command is sent to each peer just once.
+// each Command is sent to each peer just once.
 //
 func TestRPCBytes2B(t *testing.T) {
 	servers := 3
@@ -158,19 +159,23 @@ func TestFailAgree2B(t *testing.T) {
 	cfg.begin("Test (2B): agreement despite follower disconnection")
 
 	cfg.one(101, servers, false)
-
+	DPrintf("[Progress] 162 pass")
 	// disconnect one follower from the network.
 	leader := cfg.checkOneLeader()
+	DPrintf("[Debug] Server%d is now the leader", leader)
 	cfg.disconnect((leader + 1) % servers)
-
+	DPrintf("[Debug] Server%d has disconnected", (leader+1)%servers)
 	// the leader and remaining follower should be
 	// able to agree despite the disconnected follower.
 	cfg.one(102, servers-1, false)
+	DPrintf("[Progress] 171 pass")
 	cfg.one(103, servers-1, false)
+	DPrintf("[Progress] 173 pass")
 	time.Sleep(RaftElectionTimeout)
 	cfg.one(104, servers-1, false)
+	DPrintf("[Progress] 176 pass")
 	cfg.one(105, servers-1, false)
-
+	DPrintf("[Progress] 178 pass")
 	// re-connect
 	cfg.connect((leader + 1) % servers)
 
@@ -178,8 +183,10 @@ func TestFailAgree2B(t *testing.T) {
 	// previous agreements, and be able to agree
 	// on new commands.
 	cfg.one(106, servers, true)
+	DPrintf("[Progress] 186 pass")
 	time.Sleep(RaftElectionTimeout)
 	cfg.one(107, servers, true)
+	DPrintf("[Progress] 189 pass")
 
 	cfg.end()
 }
@@ -349,7 +356,7 @@ func TestRejoin2B(t *testing.T) {
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect(leader1)
 
-	// make old leader try to agree on some entries
+	// make old leader try to agree on some Entries
 	cfg.rafts[leader1].Start(102)
 	cfg.rafts[leader1].Start(103)
 	cfg.rafts[leader1].Start(104)
@@ -531,7 +538,7 @@ loop:
 		}
 
 		if total2-total1 > (iters+1+3)*3 {
-			t.Fatalf("too many RPCs (%v) for %v entries\n", total2-total1, iters)
+			t.Fatalf("too many RPCs (%v) for %v Entries\n", total2-total1, iters)
 		}
 
 		success = true
@@ -680,12 +687,12 @@ func TestPersist32C(t *testing.T) {
 
 //
 // Test the scenarios described in Figure 8 of the extended Raft paper. Each
-// iteration asks a leader, if there is one, to insert a command in the Raft
+// iteration asks a leader, if there is one, to insert a Command in the Raft
 // log.  If there is a leader, that leader will fail quickly with a high
-// probability (perhaps without committing the command), or crash after a while
-// with low probability (most likey committing the command).  If the number of
+// probability (perhaps without committing the Command), or crash after a while
+// with low probability (most likey committing the Command).  If the number of
 // alive servers isn't enough to form a majority, perhaps start a new server.
-// The leader in a new Term may try to finish replicating log entries that
+// The leader in a new Term may try to finish replicating log Entries that
 // haven't been committed yet.
 //
 func TestFigure82C(t *testing.T) {
@@ -876,7 +883,7 @@ func internalChurn(t *testing.T, unreliable bool) {
 								values = append(values, x)
 							}
 						} else {
-							cfg.t.Fatalf("wrong command type")
+							cfg.t.Fatalf("wrong Command type")
 						}
 						break
 					}
