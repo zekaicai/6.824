@@ -75,29 +75,15 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	lastNewEntryIndex := args.PrevLogIndex
 	if !args.isHeartBeat() {
 
-		// If an existing entry conflicts with a new one (same index
-		// but different terms), delete the existing entry and all that
-		// follow it
-		startIndex := args.PrevLogIndex + 1
-		for i, entry := range args.Entries {
-
-			idx := i + startIndex
-			if rf.containsLogEntryAtIndex(idx) {
-
-				if !rf.containsMatchingLogEntry(idx, entry.Term) {
-					rf.raftDPrintf("Does not contain log entry at index of %d "+
-						"whose term is %d, truncate log starting from index of %d",
-						idx, entry.Term, idx)
-					rf.log = rf.log[:idx]
-				} else {
-					continue
-				}
-			}
-			rf.log = append(rf.log, entry)
-			rf.raftDPrintf("Append entry of term %d at index of %d", entry.Term, idx)
-			lastNewEntryIndex = idx
-		}
+		lastNewEntryIndex = rf.appendEntriesInRPC(args)
 	}
+
+	rf.updateCommitIndex(args, lastNewEntryIndex)
+
+	rf.mu.Unlock()
+}
+
+func (rf *Raft) updateCommitIndex(args *AppendEntriesArgs, lastNewEntryIndex int) {
 
 	// The min in the final step (#5) of AppendEntries is necessary,
 	// and it needs to be computed with the index of the last new entry.
@@ -114,8 +100,34 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			"commit index is now %d", args.LeaderId, rf.commitIndex)
 		go rf.applyLogEntries()
 	}
+}
 
-	rf.mu.Unlock()
+func (rf *Raft) appendEntriesInRPC(args *AppendEntriesArgs) int {
+
+	// If an existing entry conflicts with a new one (same index
+	// but different terms), delete the existing entry and all that
+	// follow it
+	lastNewEntryIndex := args.PrevLogIndex
+	startIndex := args.PrevLogIndex + 1
+	for i, entry := range args.Entries {
+
+		idx := i + startIndex
+		if rf.containsLogEntryAtIndex(idx) {
+
+			if !rf.containsMatchingLogEntry(idx, entry.Term) {
+				rf.raftDPrintf("Does not contain log entry at index of %d "+
+					"whose term is %d, truncate log starting from index of %d",
+					idx, entry.Term, idx)
+				rf.log = rf.log[:idx]
+			} else {
+				continue
+			}
+		}
+		rf.log = append(rf.log, entry)
+		rf.raftDPrintf("Append entry of term %d at index of %d", entry.Term, idx)
+		lastNewEntryIndex = idx
+	}
+	return lastNewEntryIndex
 }
 
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
@@ -232,19 +244,7 @@ func (rf *Raft) sendAppendEntriesAndHandleReply(follower int) {
 	if reply.Success {
 		rf.mu.Lock()
 		// If successful: update nextIndex and matchIndex for follower (§5.3)
-		rf.nextIndex[follower] = lastIndex + 1
-		rf.matchIndex[follower] = lastIndex
-		rf.raftDPrintf("Updated server%d's nextIndex to %d because it received "+
-			"success reply of append entry RPC up to %d", follower, lastIndex+1, lastIndex)
-		newCommitIndex := lastIndex
-		for ; newCommitIndex > rf.commitIndex; newCommitIndex-- {
-			if rf.majorityAgreesOnIndex(newCommitIndex) && rf.log[newCommitIndex].Term == rf.currentTerm {
-				break
-			}
-		}
-		rf.commitIndex = newCommitIndex
-		rf.raftDPrintf("Majority agrees on %d, set commit index to %d", rf.commitIndex, rf.commitIndex)
-		go rf.applyLogEntries()
+		rf.updateMatchIndexAndNextIndexForFollower(follower, lastIndex)
 		rf.mu.Unlock()
 		return
 	}
@@ -257,6 +257,23 @@ func (rf *Raft) sendAppendEntriesAndHandleReply(follower int) {
 		" PrevLogTerm %d fails, decrement nextIndex "+
 		"for follower %d", prevLogIndex, prevLogTerm, follower)
 	rf.mu.Unlock()
+}
+
+func (rf *Raft) updateMatchIndexAndNextIndexForFollower(follower int, lastIndex int) {
+
+	rf.nextIndex[follower] = lastIndex + 1
+	rf.matchIndex[follower] = lastIndex
+	rf.raftDPrintf("Updated server%d's nextIndex to %d because it received "+
+		"success reply of append entry RPC up to %d", follower, lastIndex+1, lastIndex)
+	newCommitIndex := lastIndex
+	for ; newCommitIndex > rf.commitIndex; newCommitIndex-- {
+		if rf.majorityAgreesOnIndex(newCommitIndex) && rf.log[newCommitIndex].Term == rf.currentTerm {
+			break
+		}
+	}
+	rf.commitIndex = newCommitIndex
+	rf.raftDPrintf("Majority agrees on %d, set commit index to %d", rf.commitIndex, rf.commitIndex)
+	go rf.applyLogEntries()
 }
 
 //func (rf *Raft) trySendingAppendEntriesTo(follower int, args *AppendEntriesArgs, reply *AppendEntriesReply) {
