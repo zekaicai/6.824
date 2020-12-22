@@ -157,40 +157,6 @@ func (rf *Raft) startAppendEntries() {
 	}
 }
 
-//func (rf *Raft) sendHeartbeatAndHandleReply(follower int) {
-//
-//	rf.mu.Lock()
-//
-//	args := &AppendEntriesArgs{
-//		Term:         rf.currentTerm,
-//		LeaderId:     rf.me,
-//		LeaderCommit: rf.commitIndex,
-//	}
-//	rf.mu.Unlock()
-//	reply := &AppendEntriesReply{}
-//	DPrintf("[Server%d] Sent heartbeat to Server%d", args.LeaderId, follower)
-//	ok := rf.sendAppendEntries(follower, args, reply)
-//
-//	if !ok {
-//
-//		// TODO: seems sending don't need to retry if sending heartbeat fails
-//		DPrintf("[Server%d] Error when sending heartbeat to Server%d", args.LeaderId, follower)
-//		return
-//	}
-//
-//	rf.mu.Lock()
-//	defer rf.mu.Unlock()
-//	if reply.Term > rf.currentTerm {
-//		DPrintf("[Server%d] Received response for a hearbeat, but find"+
-//			"its Term is smaller than that in the reply, so it set its Term to"+
-//			"the new Term and enter follower state(from leader state)", rf.me)
-//		rf.setState(Follower)
-//		rf.currentTerm = reply.Term
-//		rf.votedFor = -1
-//		rf.resetElectionTimer()
-//	}
-//}
-
 func (rf *Raft) sendAppendEntriesAndHandleReply(follower int) {
 
 	rf.mu.Lock()
@@ -202,13 +168,12 @@ func (rf *Raft) sendAppendEntriesAndHandleReply(follower int) {
 	if rf.state != Leader {
 		rf.raftDPrintf("Find itself no longer leader when preparing args for an " +
 			"append entry RPC, stop sending")
-		rf.raftDPrintf("De 了一天的 bug 原来在这里")
+		//rf.raftDPrintf("De 了一天的 bug 原来在这里")
 		rf.mu.Unlock()
 		return
 	}
 	nextIndex := rf.nextIndex[follower]
 	prevLogIndex := nextIndex - 1
-	//DPrintf("[Server%d] PrevLogIndex to send is %d", rf.me, prevLogIndex)
 	prevLogEntry := rf.log[prevLogIndex]
 	prevLogTerm := prevLogEntry.Term
 	// because leader sent entries to the end,
@@ -229,27 +194,18 @@ func (rf *Raft) sendAppendEntriesAndHandleReply(follower int) {
 		"prevLogIndex to send is %d, prevLogTerm is %d, sent entries range is[%d, %d]",
 		follower, prevLogIndex, prevLogTerm, nextIndex, lastIndex)
 	rf.mu.Unlock()
-	//for {
-	//	if rf.killed() {
-	//		return
-	//	}
-	//	ok := rf.sendAppendEntries(follower, args, reply)
-	//	if ok {
-	//		break
-	//	}
-	//	DPrintf("[Server%d] Error when sending append entry RPC to server %d, retry", rf.me, follower)
-	//}
+
 	ok := rf.sendAppendEntries(follower, args, reply)
 	if !ok {
 		//DPrintf("[Server%d] Error when sending append entries to Server%d", args.LeaderId, follower)
 		return
 	}
 
-	//From experience, we have found that by far the simplest thing to do is
-	//to first record the term in the reply (it may be higher than your current term),
-	//and then to compare the current term with the term you sent in your original RPC.
-	//	If the two are different, drop the reply and return. Only if the two terms are
-	//the same should you continue processing the reply.
+	// From experience, we have found that by far the simplest thing to do is
+	// to first record the term in the reply (it may be higher than your current term),
+	// and then to compare the current term with the term you sent in your original RPC.
+	// If the two are different, drop the reply and return. Only if the two terms are
+	// the same should you continue processing the reply.
 	rf.mu.Lock()
 	if rf.currentTerm != sentCurrentTerm {
 
@@ -280,13 +236,8 @@ func (rf *Raft) sendAppendEntriesAndHandleReply(follower int) {
 		rf.matchIndex[follower] = lastIndex
 		rf.raftDPrintf("Updated server%d's nextIndex to %d because it received "+
 			"success reply of append entry RPC up to %d", follower, lastIndex+1, lastIndex)
-		// TODO: here it should not conclude the commit index should update, If there exists an N such that N > commitIndex, a majority of matchIndex[i] ≥ N, and log[N].term == currentTerm: set commitIndex = N (§5.3, §5.4)
-		// maybe should use another goroutine to check when commit index should be updated when matchIndex changes, which is here, maybe use a cond vatiable should use another goroutine to check when commit index should be updated when matchIndex changes, which is here, maybe use a cond vatiable
 		newCommitIndex := lastIndex
-		//DPrintf("newCommitIndex = %d", newCommitIndex)
-		//DPrintf("rf.commitIndex = %d", rf.commitIndex)
 		for ; newCommitIndex > rf.commitIndex; newCommitIndex-- {
-			//DPrintf("newCommitIndex = %d", newCommitIndex)
 			if rf.majorityAgreesOnIndex(newCommitIndex) && rf.log[newCommitIndex].Term == rf.currentTerm {
 				break
 			}
@@ -300,16 +251,6 @@ func (rf *Raft) sendAppendEntriesAndHandleReply(follower int) {
 
 	rf.mu.Lock()
 
-	//// Server return false if term < currentTerm
-	//// in this case the Success argument in reply
-	//// does not contain information about nextIndex
-	//// should return here
-	//if reply.Term > sentCurrentTerm {
-	//
-	//	rf.mu.Unlock()
-	//	return
-	//}
-
 	//If AppendEntries fails because of log inconsistency: decrement nextIndex and retry(retry after next heartbeat interval
 	rf.nextIndex[follower]--
 	rf.raftDPrintf("Append entries of PrevLogIndex %d,"+
@@ -318,19 +259,19 @@ func (rf *Raft) sendAppendEntriesAndHandleReply(follower int) {
 	rf.mu.Unlock()
 }
 
-func (rf *Raft) trySendingAppendEntriesTo(follower int, args *AppendEntriesArgs, reply *AppendEntriesReply) {
-
-	for {
-		if rf.killed() {
-			return
-		}
-		ok := rf.sendAppendEntries(follower, args, reply)
-		if ok {
-			break
-		}
-		DPrintf("[Server%d] Error when sending append entry RPC to server %d, retry", rf.me, follower)
-	}
-}
+//func (rf *Raft) trySendingAppendEntriesTo(follower int, args *AppendEntriesArgs, reply *AppendEntriesReply) {
+//
+//	for {
+//		if rf.killed() {
+//			return
+//		}
+//		ok := rf.sendAppendEntries(follower, args, reply)
+//		if ok {
+//			break
+//		}
+//		DPrintf("[Server%d] Error when sending append entry RPC to server %d, retry", rf.me, follower)
+//	}
+//}
 
 func (rf *Raft) applyLogEntries() {
 
