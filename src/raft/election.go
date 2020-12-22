@@ -34,14 +34,15 @@ type RequestVoteReply struct {
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
 	rf.mu.Lock()
-	DPrintf("[Server%d] Received vote request from Server%d", rf.me, args.CandidateId)
+	rf.raftDPrintf("Received vote request from Server%d, candidate's term is %d",
+		args.CandidateId, args.Term)
 	// reply false if Term < currentTerm
 	if args.Term < rf.currentTerm {
 
 		reply.VoteGranted = false
 		reply.Term = rf.currentTerm
-		DPrintf("[Server%d] Vote false for request from Server%d, "+
-			"because its Term %d is greater than that in request(Term %d)", rf.me, args.CandidateId,
+		rf.raftDPrintf("Vote false for request from Server%d, "+
+			"because its Term %d is greater than that in request(Term %d)", args.CandidateId,
 			rf.currentTerm, args.Term)
 		// reply false if Term < currentTerm
 		rf.mu.Unlock()
@@ -56,6 +57,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.setState(Follower)
 		rf.currentTerm = args.Term
 		rf.votedFor = -1
+		rf.raftDPrintf("Find candidate's term(%d) is greater than its own, update its term and "+
+			"become follower", args.Term)
 	}
 	// if voted for is null or candidateID
 	// and candidate's log is at least as up-to-date as receiver's log, grant vote
@@ -64,15 +67,15 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		if rf.isMoreUpToDate(args) {
 			reply.Term = rf.currentTerm
 			reply.VoteGranted = false
-			DPrintf("[Server%d] Find its log is more up-to-date "+
-				"than that in the RPC args from Server%d, vote false", rf.me, args.CandidateId)
+			rf.raftDPrintf("Find its log is more up-to-date "+
+				"than that in the RPC args from Server%d, vote false", args.CandidateId)
 			rf.mu.Unlock()
 			return
 		}
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateId
-		DPrintf("[Server%d] Vote true for request from Server%d", rf.me, args.CandidateId)
+		rf.raftDPrintf("Vote true for request from Server%d", args.CandidateId)
 		rf.resetElectionTimer()
 		rf.mu.Unlock()
 		return
@@ -80,8 +83,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 	reply.Term = rf.currentTerm
 	reply.VoteGranted = false
-	DPrintf("[Server%d] Vote false for request from Server%d,"+
-		" because it has already voted for another server in this Term", rf.me, args.CandidateId)
+	rf.raftDPrintf("Vote false for request from Server%d,"+
+		" because it has already voted for another server in this Term", args.CandidateId)
 	rf.mu.Unlock()
 	return
 }
@@ -135,7 +138,7 @@ func (rf *Raft) startElection() {
 	rf.mu.Lock()
 	rf.currentTerm++
 	rf.setState(Candidate)
-	DPrintf("[Server%d] Start an election, it's currentTerm is %d", rf.me, rf.currentTerm)
+	rf.raftDPrintf("Start an election, it's currentTerm is %d", rf.currentTerm)
 	count := 0
 	finished := 0
 	numServers := len(rf.peers)
@@ -180,8 +183,8 @@ func (rf *Raft) waitForVoteResult(count *int, finished *int) {
 	}
 
 	if rf.waitElectionTimeOut {
-		DPrintf("[Server%d] Times out when waiting for result of the election"+
-			", so it ends the current election thread, the timer will start a new election thread", rf.me)
+		rf.raftDPrintf("Times out when waiting for result of the election" +
+			", so it ends the current election thread, the timer will start a new election thread")
 		rf.mu.Unlock()
 		return
 	}
@@ -189,20 +192,20 @@ func (rf *Raft) waitForVoteResult(count *int, finished *int) {
 	if rf.state == Candidate {
 
 		if *count > numServers/2 {
-			DPrintf("[Server%d] Received %d votes, win an election", rf.me, *count)
+			rf.raftDPrintf("Received %d votes, win an election", *count)
 			rf.setState(Leader)
 			rf.initMatchIndex()
 			rf.initNextIndex()
 			rf.printRaftMessage()
 			go rf.startAppendEntries()
 		} else {
-			DPrintf("[Server%d] Received %d votes, lose an election", rf.me, *count)
+			rf.raftDPrintf("Received %d votes, lose an election", *count)
 			rf.setState(Follower)
 		}
 	} else {
 
-		DPrintf("[Server%d] End the election of term %d "+
-			"not in candidate state, it's current state is %d", rf.me, term, rf.state)
+		rf.raftDPrintf("End the election of term %d "+
+			"not in candidate state, it's current state is %d", term, rf.state)
 		//rf.resetElectionTimer()
 	}
 
@@ -217,9 +220,9 @@ func (rf *Raft) requestVoteAndHandleReply(voter int, count, finished *int) {
 	args.Term = rf.currentTerm
 	args.LastLogIndex = len(rf.log) - 1
 	args.LastLogTerm = rf.log[args.LastLogIndex].Term
+	rf.raftDPrintf("Send vote request to Server%d", voter)
 	rf.mu.Unlock()
 	reply := &RequestVoteReply{}
-	DPrintf("[Server%d] Send vote request to Server%d", rf.me, voter)
 
 	for {
 		if rf.killed() {
@@ -229,7 +232,7 @@ func (rf *Raft) requestVoteAndHandleReply(voter int, count, finished *int) {
 		if ok {
 			break
 		}
-		DPrintf("[Server%d] Error when sending vote request to server %d, retry", rf.me, voter)
+		//DPrintf("[Server%d] Error when sending vote request to server %d, retry", rf.me, voter)
 	}
 
 	rf.mu.Lock() // TODO: the lock() is to protect count and finished local variables, not sure if should use another small lock
@@ -237,23 +240,26 @@ func (rf *Raft) requestVoteAndHandleReply(voter int, count, finished *int) {
 
 	if reply.Term < rf.currentTerm {
 
-		DPrintf("[Server%d] Received response for a vote request in Term %d, but it's now"+
+		rf.raftDPrintf("Received response for a vote request from Term %d, but it's now "+
 			"in Term %d, which means it received an outdated vote,"+
-			" just discard the vote.", rf.me, reply.Term, rf.currentTerm)
+			" just discard the vote.", reply.Term, rf.currentTerm)
 		return
 	}
 
 	if reply.Term > rf.currentTerm {
-		DPrintf("[Server%d] Received response for a vote request, but find "+
-			"its Term is smaller than that in the reply, so it set its Term to "+
-			"the new Term and enter follower state(from candidate state)", rf.me)
+		rf.raftDPrintf("Received response for a vote request, but find "+
+			"its Term is smaller than that in the reply(Term %d), so it set its Term to "+
+			"the new Term and enter follower state(from candidate state)", reply.Term)
 		rf.setState(Follower)
 		rf.currentTerm = reply.Term
 		rf.votedFor = -1
 		rf.resetElectionTimer()
 	}
 	if reply.VoteGranted {
+		rf.raftDPrintf("Received vote")
 		*count++
+	} else {
+		rf.raftDPrintf("Received against vote")
 	}
 	*finished++
 	rf.cond.Broadcast()

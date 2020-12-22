@@ -387,13 +387,17 @@ func TestBackup2B(t *testing.T) {
 	defer cfg.cleanup()
 
 	cfg.begin("Test (2B): leader backs up quickly over incorrect follower logs")
+	DPrintf("Test (2B): leader backs up quickly over incorrect follower logs")
 
 	cfg.one(rand.Int(), servers, true)
 
 	// put leader and one follower in a partition
 	leader1 := cfg.checkOneLeader()
+	DPrintf("[Progress] Server%d disconnected", (leader1+2)%servers)
 	cfg.disconnect((leader1 + 2) % servers)
+	DPrintf("[Progress] Server%d disconnected", (leader1+3)%servers)
 	cfg.disconnect((leader1 + 3) % servers)
+	DPrintf("[Progress] Server%d disconnected", (leader1+4)%servers)
 	cfg.disconnect((leader1 + 4) % servers)
 
 	// submit lots of commands that won't commit
@@ -403,12 +407,17 @@ func TestBackup2B(t *testing.T) {
 
 	time.Sleep(RaftElectionTimeout / 2)
 
+	DPrintf("[Progress] Server%d disconnected", (leader1+0)%servers)
 	cfg.disconnect((leader1 + 0) % servers)
+	DPrintf("[Progress] Server%d disconnected", (leader1+1)%servers)
 	cfg.disconnect((leader1 + 1) % servers)
 
 	// allow other partition to recover
+	DPrintf("[Progress] Server%d connect", (leader1+2)%servers)
 	cfg.connect((leader1 + 2) % servers)
+	DPrintf("[Progress] Server%d connect", (leader1+3)%servers)
 	cfg.connect((leader1 + 3) % servers)
+	DPrintf("[Progress] Server%d connect", (leader1+4)%servers)
 	cfg.connect((leader1 + 4) % servers)
 
 	// lots of successful commands to new group.
@@ -422,6 +431,7 @@ func TestBackup2B(t *testing.T) {
 	if leader2 == other {
 		other = (leader2 + 1) % servers
 	}
+	DPrintf("[Progress] Server%d disconnected", other)
 	cfg.disconnect(other)
 
 	// lots more commands that won't commit
@@ -433,10 +443,14 @@ func TestBackup2B(t *testing.T) {
 
 	// bring original leader back to life,
 	for i := 0; i < servers; i++ {
+		DPrintf("[Progress] Server%d disconnected", i)
 		cfg.disconnect(i)
 	}
+	DPrintf("[Progress] Server%d connect", (leader1+0)%servers)
 	cfg.connect((leader1 + 0) % servers)
+	DPrintf("[Progress] Server%d connect", (leader1+1)%servers)
 	cfg.connect((leader1 + 1) % servers)
+	DPrintf("[Progress] Server%d connect", other)
 	cfg.connect(other)
 
 	// lots of successful commands to new group.
@@ -446,6 +460,7 @@ func TestBackup2B(t *testing.T) {
 
 	// now everyone
 	for i := 0; i < servers; i++ {
+		DPrintf("[Progress] Server%d connect", i)
 		cfg.connect(i)
 	}
 	cfg.one(rand.Int(), servers, true)

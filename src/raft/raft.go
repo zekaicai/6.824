@@ -18,6 +18,7 @@ package raft
 //
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -105,6 +106,12 @@ type Raft struct {
 	applyCh     chan ApplyMsg
 }
 
+func (rf *Raft) raftDPrintf(str string, a ...interface{}) {
+
+	prefix := fmt.Sprintf("[Server%d][Term%d] ", rf.me, rf.currentTerm)
+	DPrintf(prefix+str, a...)
+}
+
 // return currentTerm and whether this server
 // believes it is the leader.
 func (rf *Raft) GetState() (int, bool) {
@@ -178,10 +185,10 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 
 	// Your code here (2B).
 	rf.mu.Lock()
-	DPrintf("[Server%d] Start()", rf.me)
 	isLeader = rf.state == Leader
 	if !isLeader {
 		rf.mu.Unlock()
+		rf.raftDPrintf("Start() return false")
 		return index, term, isLeader
 	}
 
@@ -191,6 +198,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	})
 	index = len(rf.log) - 1
 	term = rf.currentTerm
+	rf.raftDPrintf("Start() return true, new log entry is at index of %d", index)
 	rf.mu.Unlock()
 	return index, term, isLeader
 }
